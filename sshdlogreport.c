@@ -82,7 +82,8 @@ void readkey(char *fname)
 int fileexists(const char *filename)
 {
 	FILE *file;
-	if (file = fopen(filename, "r")) {
+	file = fopen(filename, "r");
+	if (file != NULL) {
 		fclose(file);
 		return 1;
 	}
