@@ -9,18 +9,19 @@
 
 void usage(void)
 {
-	printf("sshdlogreport: read /var/log/auth.log, report failed log information to url\n");
+	printf("sshdlogreport: read /var/log/auth.log, report failed log information to url\n\n");
 	printf
-	    ("sshdlogreport [ -d ] [ -k keyfile ] [ -h ] [ -l logfile ] [ -u report_url ] [ -r reportip ]\n");
+	    ("sshdlogreport [ -d ] [ -k keyfile ] [ -h ] [ -l logfile ] [ -u report_url ] [ -r reportip ]\n\n");
 	printf("   -d             enable debug\n");
 	printf("   -k keyfile     keyfile, default is keyfile.txt\n");
-	printf("   -l logfile     logfile path, default is /var/log/auth.log\n");
+	printf("   -l logfile     logfile path, default is /var/log/auth.log or /var/log/secure\n");
 	printf
 	    ("   -u report_url  report_url, default is http://blackip.ustc.edu.cn/sshdlogreport.php\n");
-	printf("   -r reportip    report ip\n");
+	printf("   -r reportip    report ip\n\n");
 	printf("report method POST:\n");
 	printf("   curl -d @- report_url\n");
-	printf("   POST data    apikey=key&fromip=IP&username=USERNAME&count=COUNT&reportip=IP\n");
+	printf
+	    ("   POST data    apikey=key&fromip=IP&username=USERNAME&count=COUNT&reportip=IP\n\n");
 	exit(0);
 }
 
@@ -78,6 +79,16 @@ void readkey(char *fname)
 	fclose(fp);
 }
 
+int fileexists(const char *filename)
+{
+	FILE *file;
+	if (file = fopen(filename, "r")) {
+		fclose(file);
+		return 1;
+	}
+	return 0;
+}
+
 int main(int argc, char **argv)
 {
 	FILE *fp;
@@ -106,8 +117,16 @@ int main(int argc, char **argv)
 		}
 	if (apikey[0] == 0)
 		readkey("apikey.txt");
-	if (logfile[0] == 0)
-		strcpy(logfile, "/var/log/auth.log");
+	if (apikey[0] == 0) {
+		fprintf(stderr, "ERROR: apkey = NULL\n\n");
+		usage();
+	}
+	if (logfile[0] == 0) {
+		if (fileexists("/var/log/auth.log"))
+			strcpy(logfile, "/var/log/auth.log");
+		else
+			strcpy(logfile, "/var/log/secure");
+	}
 	if (report_url[0] == 0)
 		strcpy(report_url, "http://blackip.ustc.edu.cn/sshdlogreport.php");
 
