@@ -36,3 +36,17 @@ APIKEY文件: apikey.txt
 ./sshdlogreport
 ```
 
+### 上报信息
+
+日志中出现登录错误时，会使用curl POST方式，把以下信息上报给URL：
+```
+apikey=key&reportip=IP&ip=IP&username=USERNAME&count=COUNT&msg=sshd_fail_log
+含义如下：
+
+key: 取自apikey.txt，用于验证
+reportip: 命令行指定的信息，默认为空（服务器端可以获取HTTP会话的IP）
+ip: 密码错误的IP地址
+username: 错误的用户名
+count: 次数(有时候连续的错误会被记录成日志的一条)
+msg: 原始日志
+```
