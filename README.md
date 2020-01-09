@@ -1,6 +1,6 @@
 ### sshd 错误登录日志上报
 
-将 sshd 错误登录日志上报到集中的URL
+将 sshd 错误登录日志上报到集中的URL，进行记录和处理。我们用来做自动封锁IP，请见 http://blackip.ustc.edu.cn/sshrawlst.php
 
 
 ### 下载和编译
