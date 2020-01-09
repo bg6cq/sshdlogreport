@@ -21,7 +21,7 @@ void usage(void)
 	printf("report method POST:\n");
 	printf("   curl -d @- report_url\n");
 	printf
-	    ("   POST data    apikey=key&fromip=IP&username=USERNAME&count=COUNT&reportip=IP\n\n");
+	    ("   POST data    apikey=key&reportip=IP&ip=IP&username=USERNAME&count=COUNT&msg=sshd_fail_log\n\n");
 	exit(0);
 }
 
@@ -58,6 +58,46 @@ void daemon_init(void)
 	close(0);
 	close(1);
 	close(2);
+}
+
+static unsigned char hexchars[] = "0123456789ABCDEF";
+
+int URLEncode(const char *str, const int strsz, char *result, const int resultsz)
+{
+	int i, j;
+	char ch;
+
+	if (strsz < 0 || resultsz < 0)
+		return -1;
+
+	for (i = 0, j = 0; i < strsz && j < resultsz; i++) {
+		ch = *(str + i);
+		if ((ch >= 'A' && ch <= 'Z') ||
+		    (ch >= 'a' && ch <= 'z') ||
+		    (ch >= '0' && ch <= '9') || ch == '.' || ch == '-' || ch == '*' || ch == '_')
+			result[j++] = ch;
+		else if (ch == ' ')
+			result[j++] = '+';
+		else {
+			if (j + 3 <= resultsz - 1) {
+				result[j++] = '%';
+				result[j++] = hexchars[(unsigned char)ch >> 4];
+				result[j++] = hexchars[(unsigned char)ch & 0xF];
+			} else {
+				return -2;
+			}
+		}
+	}
+
+	if (i == 0) {
+		result[0] = 0;
+		return 0;
+	} else if (i == strsz) {
+		result[j] = 0;
+		return j;
+	}
+	result[0] = 0;
+	return -2;
 }
 
 void readkey(char *fname)
@@ -139,9 +179,9 @@ int main(int argc, char **argv)
 	} else
 		daemon_init();
 
-	snprintf(buf, MAXLEN, "tail --retry --follow=name --max-unchanged-stats=5 %s", logfile);
+	snprintf(bufcmd, MAXLEN, "tail --retry --follow=name --max-unchanged-stats=5 %s", logfile);
 
-	fp = popen(buf, "r");
+	fp = popen(bufcmd, "r");
 	if (fp == NULL) {
 		printf("popen error\n");
 		exit(0);
@@ -150,16 +190,29 @@ int main(int argc, char **argv)
 /* sample log
 Jan  8 06:03:23 ipv6 sshd[6274]: message repeated 3 times: [ Failed password for root from 112.85.42.178 port 62234 ssh2]
 Jan  8 06:03:48 ipv6 sshd[7442]: Failed password for root from 112.85.42.178 port 6282 ssh2
+Jan  5 13:21:14 ipv6 sshd[22356]: Invalid user git from 210.45.66.85 port 48769
+
+do not process the following line, it's a repeat of line 3
 Jan  8 06:04:49 ipv6 sshd[8917]: Failed password for invalid user zvj from 192.83.166.81 port 60726 ssh2
 */
 	while (fgets(buf, MAXLEN, fp)) {
 		int count = 1;
 		char *p, *username, *fromip, *port;
+		char msgbuf[MAXLEN * 3];
 		if (debug)
 			fprintf(stderr, "Got: %s", buf);
-
-		if (strstr(buf, "Failed password") == NULL)
+		if (strlen(buf) < 10)
 			continue;
+
+		if (strstr(buf, "Failed password for invalid user") != NULL)
+			continue;
+		if ((strstr(buf, "Failed password") == NULL)
+		    && (strstr(buf, "Invalid user") == NULL))
+			continue;
+
+		if (buf[strlen(buf) - 1] == '\n')
+			buf[strlen(buf) - 1] = 0;
+		URLEncode(buf, strlen(buf), msgbuf, MAXLEN * 3);
 
 		p = strstr(buf, "message repeated ");
 		if (p) {
@@ -169,12 +222,13 @@ Jan  8 06:04:49 ipv6 sshd[8917]: Failed password for invalid user zvj from 192.8
 		}
 
 		p = strstr(buf, "Failed password for ");
-		if (p == NULL)
-			continue;
-		p = p + strlen("Failed password for ");
-
-		if (memcmp(p, "invalid user ", 13) == 0)
-			p = p + 13;
+		if (p == NULL) {
+			p = strstr(buf, "Invalid user ");
+			if (p == NULL)
+				continue;
+			p = p + strlen("Invalid user ");
+		} else
+			p = p + strlen("Failed password for ");
 
 		username = p;
 		while (*p && *p != ' ')
@@ -204,10 +258,7 @@ Jan  8 06:04:49 ipv6 sshd[8917]: Failed password for invalid user zvj from 192.8
 		port = p;
 		while (*p && *p != ' ')
 			p++;
-		if (*p == 0)
-			continue;
 		*p = 0;
-		p++;
 		if (debug)
 			fprintf(stderr, "count: %d, username: %s, fromip: %s, port: %s\n",
 				count, username, fromip, port);
@@ -220,12 +271,13 @@ Jan  8 06:04:49 ipv6 sshd[8917]: Failed password for invalid user zvj from 192.8
 				fprintf(stderr, "popen %s error\n", bufcmd);
 			continue;
 		}
-		fprintf(fpcmd, "apikey=%s&count=%d&username=%s&fromip=%s&port=%s&reportip=%s",
-			apikey, count, username, fromip, port, reportip);
+		fprintf(fpcmd,
+			"apikey=%s&reportip=%s&ip=%s&count=%d&username=%s&port=%s&msg=%s",
+			apikey, reportip, fromip, count, username, port, msgbuf);
 		if (debug)
 			fprintf(stderr,
-				"send to curl: apikey=%s&count=%d&username=%s&fromip=%s&port=%s&reportip=%s\n",
-				apikey, count, username, fromip, port, reportip);
+				"send to curl: apikey=%s&reportip=%s&ip=%s&count=%d&username=%s&port=%s&msg=%s\n",
+				apikey, reportip, fromip, count, username, port, msgbuf);
 		pclose(fpcmd);
 	}
 	pclose(fp);
