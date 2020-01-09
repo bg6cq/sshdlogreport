@@ -245,20 +245,27 @@ Jan  8 06:04:49 ipv6 sshd[8917]: Failed password for invalid user zvj from 192.8
 		fromip = p;
 		while (*p && *p != ' ')
 			p++;
-		if (*p == 0)
-			continue;
-		*p = 0;
-		p++;
-		if (memcmp(p, "port ", 5) != 0)
-			continue;
-		p = p + 5;
-		if (*p == 0)
-			continue;
 
-		port = p;
-		while (*p && *p != ' ')
+		if (*p == 0) {
+			port = "";
+		} else {
+			*p = 0;
 			p++;
-		*p = 0;
+			if (memcmp(p, "port ", 5) != 0) {
+				port = "";
+			} else {
+				p = p + 5;
+				if (*p == 0) {
+					port = "";
+				} else {
+
+					port = p;
+					while (*p && *p != ' ')
+						p++;
+					*p = 0;
+				}
+			}
+		}
 		if (debug)
 			fprintf(stderr, "count: %d, username: %s, fromip: %s, port: %s\n",
 				count, username, fromip, port);
